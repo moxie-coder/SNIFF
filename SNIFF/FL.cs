@@ -75,13 +75,17 @@ namespace SNIFF
 
 			while ((b[i] & 0x80) != 0)
 			{
-				i++;
-				arrlen = arrlen | ((b[i] & 0x7f) << (shift += 7));
+				i++; arrlen |= ((b[i] & 0x7f) << (shift += 7));
 			}
 			i++;
-			return b.Skip((int)i).Take(arrlen).ToArray();
+
+			byte[] tmp = new byte[arrlen];
+			Array.Copy(b, (int)i, tmp, 0, arrlen);
+			return tmp;
+
+			// return b.Skip((int)i).Take(arrlen).ToArray();
 		}
-		public ArrayEvent(byte id, byte[] b, ref uint i) : base(id, GatherBytes(b, ref i)) { }
+		public ArrayEvent(byte id, byte[] b, ref uint i) : base(id, GatherBytes(b, ref i)) {}
 
 		public override byte[] ToBytes()
 		{
@@ -524,6 +528,7 @@ namespace SNIFF
 					/*
 					*  Event loop
 					*/
+					uint minLength = dataEnd < (uint)b.Length ? dataEnd : (uint)b.Length;
 					while (i < dataEnd && i < b.Length)
 					{
 						byte id = b[i++];
@@ -536,11 +541,14 @@ namespace SNIFF
 						} else if (id <= (byte)Event.EventIDs.D_MAX) {
 							eventList.Add(new DwordEvent(id, BitConverter.ToUInt32(b, (int)i)));
 							i += 4;
-						} else if (id <= (byte)Event.EventIDs.A_MAX) {
-							eventList.Add(new ArrayEvent(id, b, ref i)); //makes i skip over the array length
-							i += (uint)((byte[])eventList.Last().Value).Length;
+						} else {
+							ArrayEvent ae = new ArrayEvent(id, b, ref i);
+							eventList.Add(ae); //makes i skip over the array length
+							i += (uint)((byte[])ae.Value).Length;
 						}
+						Console.Write($"\x1b[0G{i} / {minLength} : {eventList.Count} ({id:x})");
 					}
+					Console.WriteLine("");
 				}
 				else
 					throw new InvalidOperationException("Invalid data chunk");
