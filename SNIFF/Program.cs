@@ -542,9 +542,9 @@ namespace SNIFF
 				float sus = 0;
 				//if note is longer than 4 steps, or if the velocity is lower than half
 				//we actually get the sus
-                if (notes[0].Duration >= Globals.ppqn * Globals.bpmMult || notes[0].Velocity < 0x40)
+                if (daNote.Duration >= Globals.ppqn * Globals.bpmMult || daNote.Velocity < 0x40)
 				{
-                    sus = MIDITimeToMillis(Globals.bpm * Globals.bpmMult) * (notes[0].Duration - (Globals.ppqn * Globals.bpmMult) / 16);
+                    sus = MIDITimeToMillis(Globals.bpm * Globals.bpmMult) * (daNote.Duration - (Globals.ppqn * Globals.bpmMult) / 4);
 					if (sus < 0) sus = 0;
                 }
 				switch (daNote.Pitch)
