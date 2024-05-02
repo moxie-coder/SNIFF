@@ -2,6 +2,8 @@
 Tool to convert charts made in FL Studio to .json files usable in [Friday Night Funkin'](https://github.com/ninjamuffin99/Funkin).  
 Developed for use internally at SiIvaGunner.  
   
-# What makes this fork different from the original?
-I've tried to improve the process for grow up the program perfomance.  
-As result, It's faster a few times than original i guess.
+# How does this fork differ from the OG SNIFF?
+
+This fork adds the optimizations from HRK_EXEX's fork of SNIFF, along with a few modifications. These modifications include:
+- BPM Multiplier (Useful for charting songs with a BPM higher than 522)
+- Song Credits (Allows you to put a creator's name who created the song you're charting)
