@@ -35,7 +35,8 @@ namespace SNIFF
 		public const int VersionNumber = 7;
 		public const int NoteSize = 24;
 		public static ushort ppqn = 96;
-		public static string name = "";
+        public static float bpmMult = 1;
+        public static string name = "";
 		public static float bpm = 0;
 		public static List<float> bpmList = new List<float>();
 		public static int needsVoices = 0; //0 = undecided, -1 = false, 1 = true
@@ -44,7 +45,8 @@ namespace SNIFF
 		public static string gfVersion = "";
 		public static string stage = "";
 		public static string arrowSkin = "";
-	}
+        public static string songCredit = "";
+    }
 
 	public enum MIDINotes
 	{
@@ -91,12 +93,14 @@ namespace SNIFF
 			Globals.ppqn = 96;
 			Globals.name = "";
 			Globals.bpm = 0;
-			Globals.needsVoices = 0;
+            Globals.bpmMult = 0;
+            Globals.needsVoices = 0;
 			Globals.player1 = "";
 			Globals.player2 = "";
 			Globals.gfVersion = "";
 			Globals.stage = "";
-		}
+            Globals.songCredit = "";
+        }
 
 		public static FLNote MakeNote(float strumTime, int noteData, float sustainLength, bool mustHitSection, float bpm)
 		{
@@ -108,7 +112,7 @@ namespace SNIFF
 			if (sustainLength > 0)
 			{
 				duration = (uint)(sustainLength / MIDITimeToMillis(bpm));
-				if (duration < (uint)Globals.ppqn / 2)
+				if (duration < (uint)Globals.ppqn / 2 * Globals.bpmMult)
 					velo = 0x3F;
 			}
 			if (noteData >= (int)FNFNotes.BF_CAM)
@@ -273,7 +277,7 @@ namespace SNIFF
 				
 				foreach (JArray fnfNote in section["sectionNotes"])
 				{
-					FLNote swagNote = MakeNote((float)fnfNote[0] - lastBPMChangeTime.f, (int)fnfNote[1], (float)fnfNote[2], mustHitSection, bpm);
+					FLNote swagNote = MakeNote((float)fnfNote[0] - lastBPMChangeTime.f, (int)fnfNote[1], (float)fnfNote[2], mustHitSection, bpm * Globals.bpmMult);
 					swagNote.Time += lastBPMChangeTime.u;
 					if (fnfNote.Last().Type == JTokenType.Boolean && fnfNote.Last().Value<bool>() == true)
 						swagNote.Flags = 0x10; //set porta for alt anim Note
@@ -391,7 +395,7 @@ namespace SNIFF
 				Globals.bpm = Globals.bpmList[0];
 
 			// bpm section
-			song.Add("bpm", Globals.bpm);
+			song.Add("bpm", Globals.bpm * Globals.bpmMult);
 			if (Globals.needsVoices == 0) {
 				Console.Write("Use separate voices file? (y/N, default y) ");
 				Globals.needsVoices = Console.ReadLine().ToLower().Trim() == "n" ? -1 : 1;
@@ -433,7 +437,11 @@ namespace SNIFF
 
 			Console.Write("speed: ");
 			song.Add("speed", float.Parse(Console.ReadLine()));
-			int enableChangeBPM = 0; // 0 = no, 1 = yes, 2 = yes and use bpmList.txt
+
+            Console.Write("song credit (only works in js engine): ");
+            Globals.songCredit = Console.ReadLine();
+            song.Add("songCredit", Globals.songCredit);
+            int enableChangeBPM = 0; // 0 = no, 1 = yes, 2 = yes and use bpmList.txt
 
 			for (int i = 0; i < notes.Count; i++)
 			{
@@ -474,8 +482,8 @@ namespace SNIFF
 						if (newbpm != "")
 						{
 							float daBPM = float.Parse(newbpm);
-							Globals.bpm = daBPM;
-							song["bpm"] = daBPM;
+							Globals.bpm = daBPM * Globals.bpmMult;
+							song["bpm"] = daBPM * Globals.bpmMult;
 							Globals.bpmList.Add(daBPM);
 						}
 						Console.WriteLine("Selected BPM: " + Globals.bpm + "\nGreat! Keep an eye out, we'll be asking you for the new BPMs.");
@@ -524,20 +532,21 @@ namespace SNIFF
 					}*/
 					sections.Last()["mustHitSection"] = mustHitSection;
 					sectionList = ((JArray)sections.Last()["sectionNotes"]).ToObject<List<object[]>>();
-				}
+                    Console.WriteLine("remaining notes to load: " + notes.Count);
+                }
 
 				List<object> n = null;
 
-				float time = lastBPMChangeTime.f + MIDITimeToMillis(Globals.bpm) * (daNote.Time - lastBPMChangeTime.u);
+				float time = lastBPMChangeTime.f + MIDITimeToMillis(Globals.bpm * Globals.bpmMult) * (daNote.Time - lastBPMChangeTime.u);
 				//Console.WriteLine("note FNF TIME " + time);
 				float sus = 0;
-				//if note is 2 steps or longer, or if the velocity is lower than half
+				//if note is longer than 4 steps, or if the velocity is lower than half
 				//we actually get the sus
-				if (daNote.Velocity < 0x40 || daNote.Duration >= Globals.ppqn / 2)
+                if (notes[0].Duration >= Globals.ppqn * Globals.bpmMult || notes[0].Velocity < 0x40)
 				{
-					sus = MIDITimeToMillis(Globals.bpm) * (daNote.Duration - Globals.ppqn / 4);
+                    sus = MIDITimeToMillis(Globals.bpm * Globals.bpmMult) * (notes[0].Duration - (Globals.ppqn * Globals.bpmMult) / 16);
 					if (sus < 0) sus = 0;
-				}
+                }
 				switch (daNote.Pitch)
 				{
 					case (uint)MIDINotes.BF_CAM:
@@ -762,7 +771,9 @@ namespace SNIFF
 				Filter = "FL Studio file (*.fsc, *.flp)|*.fsc;*.flp|JSON file (*.json)|*.json|All files (*.*)|*.*",
 				Multiselect = true
 			};
-			if (args.Length == 0)
+            Console.Write("bpm mult (multiplies bpm): ");
+            Globals.bpmMult = float.Parse(Console.ReadLine());
+            if (args.Length == 0)
 				Console.WriteLine("Select your .fsc, .flp or .json file...");
 			if (args.Length > 0 || fileBrowser.ShowDialog() == DialogResult.OK)
 			{
