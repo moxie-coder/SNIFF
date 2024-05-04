@@ -532,7 +532,6 @@ namespace SNIFF
 					}*/
 					sections.Last()["mustHitSection"] = mustHitSection;
 					sectionList = ((JArray)sections.Last()["sectionNotes"]).ToObject<List<object[]>>();
-                    Console.WriteLine("remaining notes to load: " + notes.Count);
                 }
 
 				List<object> n = null;
