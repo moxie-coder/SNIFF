@@ -217,11 +217,12 @@ namespace SNIFF
 
 		static List<byte> JSONtoFL(JObject o)
 		{
+
+			Globals.ppqn = 96;
 			Console.Write("How is set value of PPQ? (Default is 96, Max is 65535, 0 will set in 96) ");
-			try {
-				Globals.ppqn = ushort.Parse(Console.ReadLine());
-            } catch (FormatException) {
-				Globals.ppqn = 96;
+			string tmppqn = Console.ReadLine();
+			if (tmppqn != null) {
+				Globals.ppqn = ushort.Parse(tmppqn);
 			}
 			if(Globals.ppqn == 0) Globals.ppqn = 96;
 
@@ -432,7 +433,10 @@ namespace SNIFF
 			song.Add("stage", Globals.stage);
 
 			Console.Write("speed: ");
-			song.Add("speed", float.Parse(Console.ReadLine()));
+			string spd = Console.ReadLine();
+			if (spd != null)
+				song.Add("speed", float.Parse(spd));
+			else song.Add("speed", 1.0f);
 			int enableChangeBPM = 0; // 0 = no, 1 = yes, 2 = yes and use bpmList.txt
 
 			for (int i = 0; i < notes.Count; i++)
@@ -665,6 +669,10 @@ namespace SNIFF
 			return file;
 		}
 
+		static void MIDtoJSON() {
+
+		}
+
 		static void CollectFLPGlobals(FLFile flFile)
 		{
 			Globals.ppqn = flFile.ppqn;
@@ -759,11 +767,11 @@ namespace SNIFF
 			Console.WriteLine("SiIva Note Importer For FNF (SNIFF)\nquite pungent my dear... version "+ Globals.VersionNumber +"\n");
 			OpenFileDialog fileBrowser = new OpenFileDialog {
 				InitialDirectory = Directory.GetCurrentDirectory(),
-				Filter = "FL Studio file (*.fsc, *.flp)|*.fsc;*.flp|JSON file (*.json)|*.json|All files (*.*)|*.*",
+				Filter = "FL Studio file (*.fsc, *.flp)|*.fsc;*.flp|MIDI file (*.mid)|*.mid|JSON file (*.json)|*.json|All files (*.*)|*.*",
 				Multiselect = true
 			};
 			if (args.Length == 0)
-				Console.WriteLine("Select your .fsc, .flp or .json file...");
+				Console.WriteLine("Select your .fsc, .flp .mid or .json file...");
 			if (args.Length > 0 || fileBrowser.ShowDialog() == DialogResult.OK)
 			{
 				if (args.Length == 0)
@@ -773,9 +781,9 @@ namespace SNIFF
 				{
 					if (fileName.EndsWith(".json"))
 					{
-						Console.WriteLine("Opened JSON file: "+fileName);
+						Console.WriteLine("Opened JSON file: " + fileName);
 						JObject o;
-						try {o = JObject.Parse(File.ReadAllText(fileName));}
+						try { o = JObject.Parse(File.ReadAllText(fileName)); }
 						catch (Exception e) {
 							MessageBox.Show(e.Message);
 							return;
@@ -795,6 +803,33 @@ namespace SNIFF
 							dir = Path.GetDirectoryName(saveBrowser.FileName);
 						}
 					}
+					else if (fileName.EndsWith(".mid"))
+					{
+						Console.WriteLine("Opened MID file: " + fileName);
+						Console.WriteLine("Only 1 difficulty supports.");
+						JObject o;
+						try { o = JObject.Parse(File.ReadAllText(fileName)); }
+						catch (Exception e)
+						{
+							MessageBox.Show(e.Message);
+							return;
+						}
+
+						byte[] file = JSONtoFL(o).ToArray();
+
+						SaveFileDialog saveBrowser = new SaveFileDialog
+						{
+							InitialDirectory = dir,
+							Filter = "JSON File (*.json)|*.json|All files (*.*)|*.*",
+							FileName = Path.GetFileNameWithoutExtension(fileName) + ".json",
+						};
+						if (saveBrowser.ShowDialog() == DialogResult.OK)
+						{
+							File.WriteAllBytes(saveBrowser.FileName, file);
+							dir = Path.GetDirectoryName(saveBrowser.FileName);
+						}
+					}
+
 					else
 					{
 						byte[] b = null;
