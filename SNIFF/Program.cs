@@ -533,7 +533,7 @@ namespace SNIFF
 				List<object> n = null;
 
 				double time = lastBPMChangeTime.f + MIDITimeToMillis(Globals.bpm) * (daNote.Time - lastBPMChangeTime.u);
-				String timeJSON = time.ToString("#.######");
+				time = Math.Round(time, 3, MidpointRounding.AwayFromZero);
 				//Console.WriteLine("note FNF TIME " + time);
 				double sus = 0;
 				//if note is 2 steps or longer, or if the velocity is lower than half
@@ -598,42 +598,42 @@ namespace SNIFF
 						sections.Last().Add("altAnim", true);
 						break;
 					case (uint)MIDINotes.BF_L:
-						n = new List<object>(){ timeJSON,
+						n = new List<object>(){ time,
 							mustHitSection ? 0 : 4,
 							sus};
 						break;
 					case (uint)MIDINotes.BF_D:
-						n = new List<object>(){ timeJSON,
+						n = new List<object>(){ time,
 							mustHitSection ? 1 : 5,
 							sus};
 						break;
 					case (uint)MIDINotes.BF_U:
-						n = new List<object>(){ timeJSON,
+						n = new List<object>(){ time,
 							mustHitSection ? 2 : 6,
 							sus};
 						break;
 					case (uint)MIDINotes.BF_R:
-						n = new List<object>(){ timeJSON,
+						n = new List<object>(){ time,
 							mustHitSection ? 3 : 7,
 							sus};
 						break;
 					case (uint)MIDINotes.EN_L:
-						n = new List<object>(){ timeJSON,
+						n = new List<object>(){ time,
 							mustHitSection ? 4 : 0,
 							sus};
 						break;
 					case (uint)MIDINotes.EN_D:
-						n = new List<object>(){ timeJSON,
+						n = new List<object>(){ time,
 							mustHitSection ? 5 : 1,
 							sus};
 						break;
 					case (uint)MIDINotes.EN_U:
-						n = new List<object>(){ timeJSON,
+						n = new List<object>(){ time,
 							mustHitSection ? 6 : 2,
 							sus};
 						break;
 					case (uint)MIDINotes.EN_R:
-						n = new List<object>(){ timeJSON,
+						n = new List<object>(){ time,
 							mustHitSection ? 7 : 3,
 							sus};
 						break;
