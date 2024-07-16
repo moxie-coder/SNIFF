@@ -98,7 +98,7 @@ namespace SNIFF
 			Globals.stage = "";
 		}
 
-		public static FLNote MakeNote(float strumTime, int noteData, float sustainLength, bool mustHitSection, float bpm)
+		public static FLNote MakeNote(double strumTime, int noteData, float sustainLength, bool mustHitSection, float bpm)
 		{
 			byte velo = 0x64;
 			uint noteTime = (uint)Math.Round(strumTime / MIDITimeToMillis(bpm));
@@ -242,7 +242,7 @@ namespace SNIFF
 			float bpm = (float)o["song"]["bpm"];
 			bool mustHitSection = true;
 			var lastBPMChangeTime = new {
-				u = (uint)0, f = (float)0, s = (int)0
+				u = (uint)0, f = (double)0, s = (int)0
 			};
 
 			Stopwatch sw = new Stopwatch();
@@ -274,7 +274,7 @@ namespace SNIFF
 				
 				foreach (JArray fnfNote in section["sectionNotes"])
 				{
-					FLNote swagNote = MakeNote((float)fnfNote[0] - lastBPMChangeTime.f, (int)fnfNote[1], (float)fnfNote[2], mustHitSection, bpm);
+					FLNote swagNote = MakeNote((double)fnfNote[0] - lastBPMChangeTime.f, (int)fnfNote[1], (float)fnfNote[2], mustHitSection, bpm);
 					swagNote.Time += lastBPMChangeTime.u;
 					if (fnfNote.Last().Type == JTokenType.Boolean && fnfNote.Last().Value<bool>() == true)
 						swagNote.Flags = 0x10; //set porta for alt anim Note
@@ -289,14 +289,14 @@ namespace SNIFF
 					}
 					if(sw.ElapsedMilliseconds > 10)
                     {
-						Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Float Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
+						Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Double Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
 						sw.Restart();
 					}
 					notes.Add(swagNote);
 				}
 			}
 			sw.Stop();
-			Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Float Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
+			Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Double Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
 			Console.WriteLine("");
 			byte[] nBytes = FLNotesToBytes(notes);
 			// the array length lets goo
@@ -329,9 +329,9 @@ namespace SNIFF
 				section["sectionNotes"][i][1] = s;
 			}
 		}
-		static float MIDITimeToMillis(float bpm)
+		static double MIDITimeToMillis(float bpm)
 		{
-			return (1000.0f * 60.0f / bpm / Globals.ppqn);
+			return (1000.0 * 60.0 / bpm / Globals.ppqn);
 		}
 
 		/* 
@@ -494,7 +494,7 @@ namespace SNIFF
 			List<JObject> sections = new List<JObject>();
 			bool mustHitSection = true;
 			var lastBPMChangeTime = new {
-				u = (uint)0, f = (float)0, s = (int)-1
+				u = (uint)0, f = (double)0, s = (int)-1
 			};
 			int bpmListIdx = 1;
 			int totalNotes = notes.Count;
@@ -532,9 +532,10 @@ namespace SNIFF
 
 				List<object> n = null;
 
-				float time = lastBPMChangeTime.f + MIDITimeToMillis(Globals.bpm) * (daNote.Time - lastBPMChangeTime.u);
+				double time = lastBPMChangeTime.f + MIDITimeToMillis(Globals.bpm) * (daNote.Time - lastBPMChangeTime.u);
+				String timeJSON = time.ToString("#.######");
 				//Console.WriteLine("note FNF TIME " + time);
-				float sus = 0;
+				double sus = 0;
 				//if note is 2 steps or longer, or if the velocity is lower than half
 				//we actually get the sus
 				if (daNote.Velocity < 0x40 || daNote.Duration >= Globals.ppqn / 2)
@@ -597,42 +598,42 @@ namespace SNIFF
 						sections.Last().Add("altAnim", true);
 						break;
 					case (uint)MIDINotes.BF_L:
-						n = new List<object>(){ time,
+						n = new List<object>(){ timeJSON,
 							mustHitSection ? 0 : 4,
 							sus};
 						break;
 					case (uint)MIDINotes.BF_D:
-						n = new List<object>(){ time,
+						n = new List<object>(){ timeJSON,
 							mustHitSection ? 1 : 5,
 							sus};
 						break;
 					case (uint)MIDINotes.BF_U:
-						n = new List<object>(){ time,
+						n = new List<object>(){ timeJSON,
 							mustHitSection ? 2 : 6,
 							sus};
 						break;
 					case (uint)MIDINotes.BF_R:
-						n = new List<object>(){ time,
+						n = new List<object>(){ timeJSON,
 							mustHitSection ? 3 : 7,
 							sus};
 						break;
 					case (uint)MIDINotes.EN_L:
-						n = new List<object>(){ time,
+						n = new List<object>(){ timeJSON,
 							mustHitSection ? 4 : 0,
 							sus};
 						break;
 					case (uint)MIDINotes.EN_D:
-						n = new List<object>(){ time,
+						n = new List<object>(){ timeJSON,
 							mustHitSection ? 5 : 1,
 							sus};
 						break;
 					case (uint)MIDINotes.EN_U:
-						n = new List<object>(){ time,
+						n = new List<object>(){ timeJSON,
 							mustHitSection ? 6 : 2,
 							sus};
 						break;
 					case (uint)MIDINotes.EN_R:
-						n = new List<object>(){ time,
+						n = new List<object>(){ timeJSON,
 							mustHitSection ? 7 : 3,
 							sus};
 						break;
