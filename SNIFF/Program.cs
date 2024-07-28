@@ -102,7 +102,7 @@ namespace SNIFF
             Globals.songCredit = "";
         }
 
-		public static FLNote MakeNote(float strumTime, int noteData, float sustainLength, bool mustHitSection, float bpm)
+		public static FLNote MakeNote(double strumTime, int noteData, float sustainLength, bool mustHitSection, float bpm)
 		{
 			byte velo = 0x64;
 			uint noteTime = (uint)Math.Round(strumTime / MIDITimeToMillis(bpm));
@@ -245,7 +245,7 @@ namespace SNIFF
 			float bpm = (float)o["song"]["bpm"];
 			bool mustHitSection = true;
 			var lastBPMChangeTime = new {
-				u = (uint)0, f = (float)0, s = (int)0
+				u = (uint)0, f = (double)0, s = (int)0
 			};
 
 			Stopwatch sw = new Stopwatch();
@@ -277,7 +277,7 @@ namespace SNIFF
 				
 				foreach (JArray fnfNote in section["sectionNotes"])
 				{
-					FLNote swagNote = MakeNote((float)fnfNote[0] - lastBPMChangeTime.f, (int)fnfNote[1], (float)fnfNote[2], mustHitSection, bpm * Globals.bpmMult);
+					FLNote swagNote = MakeNote((double)fnfNote[0] - lastBPMChangeTime.f, (int)fnfNote[1], (float)fnfNote[2], mustHitSection, bpm * Globals.bpmMult);
 					swagNote.Time += lastBPMChangeTime.u;
 					if (fnfNote.Last().Type == JTokenType.Boolean && fnfNote.Last().Value<bool>() == true)
 						swagNote.Flags = 0x10; //set porta for alt anim Note
@@ -292,14 +292,14 @@ namespace SNIFF
 					}
 					if(sw.ElapsedMilliseconds > 10)
                     {
-						Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Float Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
+						Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Double Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
 						sw.Restart();
 					}
 					notes.Add(swagNote);
 				}
 			}
 			sw.Stop();
-			Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Float Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
+			Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Double Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
 			Console.WriteLine("");
 			byte[] nBytes = FLNotesToBytes(notes);
 			// the array length lets goo
@@ -332,9 +332,9 @@ namespace SNIFF
 				section["sectionNotes"][i][1] = s;
 			}
 		}
-		static float MIDITimeToMillis(float bpm)
+		static double MIDITimeToMillis(float bpm)
 		{
-			return (1000.0f * 60.0f / bpm / Globals.ppqn);
+			return (1000.0 * 60.0 / bpm / Globals.ppqn);
 		}
 
 		/* 
@@ -498,7 +498,7 @@ namespace SNIFF
 			List<JObject> sections = new List<JObject>();
 			bool mustHitSection = true;
 			var lastBPMChangeTime = new {
-				u = (uint)0, f = (float)0, s = (int)-1
+				u = (uint)0, f = (double)0, s = (int)-1
 			};
 			int bpmListIdx = 1;
 			int totalNotes = notes.Count;
@@ -536,9 +536,11 @@ namespace SNIFF
 
 				List<object> n = null;
 
-				float time = lastBPMChangeTime.f + MIDITimeToMillis(Globals.bpm * Globals.bpmMult) * (daNote.Time - lastBPMChangeTime.u);
-				//Console.WriteLine("note FNF TIME " + time);
-				float sus = 0;
+				double time = lastBPMChangeTime.f + MIDITimeToMillis(Globals.bpm * Globals.bpmMult) * (daNote.Time - lastBPMChangeTime.u);
+                time = Math.Round(time, 3, MidpointRounding.AwayFromZero);
+
+                //Console.WriteLine("note FNF TIME " + time);
+                double sus = 0;
 				//if note is longer than 4 steps, or if the velocity is lower than half
 				//we actually get the sus
                 if (daNote.Duration >= Globals.ppqn * Globals.bpmMult || daNote.Velocity < 0x40)
