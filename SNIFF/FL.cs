@@ -35,6 +35,15 @@ namespace SNIFF
 		public byte ModY;
 	}
 
+	public struct JsonNote
+	{
+		public double time { get; set; }
+		public int data { get; set; }
+		public double hold { get; set; }
+		public bool altAnim { get; set; }
+		public bool isNote { get; set; }
+	}
+
 	class ByteEvent : Event
 	{
 		public ByteEvent(byte id, byte val) : base(id, val) { }

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Diagnostics;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
+using System.Runtime;
 
 /*
 *  The main class!
@@ -361,16 +362,13 @@ namespace SNIFF
 					ModY = b[i + 23]
 				};
 				notes.Add(n);
-#if DEBUG
-										Console.WriteLine("note added");
-#endif
 				i += Globals.NoteSize;
 			}
-			Console.WriteLine(notes.Count + " notes processed.");
+			Console.WriteLine(notes.Count + " notes found.");
 			return notes;
 		}
 
-		static JObject FLtoJSON(List<FLNote> notes)
+		static JObject FLtoJSON(List<FLNote> notes, string fileName)
 		{
 			if (notes == null)
 				return null;
@@ -378,8 +376,11 @@ namespace SNIFF
 			// let us start assembling the funk
 			//Console.WriteLine("\nFirst, we gotta set up some data...");
 			if (Globals.name == "") {
-				Console.Write("Song name: ");
+				Console.Write("Song name (leave here if u want set same name): ");
 				Globals.name = Console.ReadLine();
+				if (string.IsNullOrWhiteSpace(Globals.name) ) {
+					Globals.name = Path.GetFileNameWithoutExtension(fileName);
+				}
 			}
 			JObject song = new JObject {
 				{ "song", Globals.name }
@@ -434,7 +435,7 @@ namespace SNIFF
 
 			Console.Write("speed: ");
 			string spd = Console.ReadLine();
-			if (spd != null)
+			if (!string.IsNullOrWhiteSpace(spd))
 				song.Add("speed", float.Parse(spd));
 			else song.Add("speed", 1.0f);
 			int enableChangeBPM = 0; // 0 = no, 1 = yes, 2 = yes and use bpmList.txt
@@ -450,6 +451,7 @@ namespace SNIFF
 							"(y/N, default N) ");
 						if (Console.ReadLine().ToLower().Trim() == "y")
 						{
+							enableChangeBPM = 2;
 							string[] bpmListFile = File.ReadAllLines("bpmList.txt");
 							foreach (string bpmLine in bpmListFile)
 							{
@@ -499,8 +501,11 @@ namespace SNIFF
 			int bpmListIdx = 1;
 			int totalNotes = notes.Count;
 			int progress = 0;
+			int gcCounter = 0;
 			int sectionCnt = 0;
 			List<object[]> sectionList = new List<object[]>();
+			List<object> n = new List<object>(4);
+			song.Add("notes", JArray.FromObject(sections));
 
 			Stopwatch sw = new Stopwatch();
 			sw.Start();
@@ -517,6 +522,14 @@ namespace SNIFF
 					if (sectionList.Count > 0)
                     {
 						sections.Last()["sectionNotes"] = JToken.FromObject(sectionList.ToArray());
+						((JArray)song["notes"]).Add(JToken.FromObject(sections.Last()));
+						sections.Clear();
+
+						/*if (sectionList.Count >= 1000000)
+						{
+							GC.Collect();
+							gcCounter = 0;
+						}*/
 					}
 					sections.Add(DefaultSection());
 					sectionCnt++;
@@ -530,10 +543,8 @@ namespace SNIFF
 					sectionList = ((JArray)sections.Last()["sectionNotes"]).ToObject<List<object[]>>();
 				}
 
-				List<object> n = null;
-
 				double time = lastBPMChangeTime.f + MIDITimeToMillis(Globals.bpm) * (daNote.Time - lastBPMChangeTime.u);
-				time = Math.Round(time, 3, MidpointRounding.AwayFromZero);
+				time = Math.Round(time, 5, MidpointRounding.AwayFromZero);
 				//Console.WriteLine("note FNF TIME " + time);
 				double sus = 0;
 				//if note is 2 steps or longer, or if the velocity is lower than half
@@ -564,18 +575,18 @@ namespace SNIFF
 						sectionList = ((JArray)sections.Last()["sectionNotes"]).ToObject<List<object[]>>();
 						break;
 					case (uint)MIDINotes.BPM_CH:
-						if(sections.Count == lastBPMChangeTime.s)
+						if(sectionCnt == lastBPMChangeTime.s)
 						{
-							Console.Write("BPM change event found on bar " + sections.Count + ", but this section\n" +
+							Console.WriteLine("\nBPM change event found on bar " + sectionCnt + ", but this section\n" +
 											"already had a BPM change, so it was ignored.");
 							break;
 						}
-						Console.WriteLine("BPM change event found on bar " + sections.Count + "!");
+						Console.WriteLine("\nBPM change event found on bar " + sectionCnt + "!");
 						if (enableChangeBPM == 2 && bpmListIdx < Globals.bpmList.Count)
 							Globals.bpm = Globals.bpmList[bpmListIdx++];
 						else if (enableChangeBPM == 1)
 						{
-							Console.Write("New BPM: ");
+							Console.WriteLine("\nNew BPM: ");
 							float daBPM = float.Parse(Console.ReadLine());
 							Globals.bpm = daBPM;
 							Globals.bpmList.Add(daBPM);
@@ -591,87 +602,86 @@ namespace SNIFF
 							}
 						}
 						lastBPMChangeTime = new {
-							u = daNote.Time, f = time, s = sections.Count
+							u = daNote.Time, f = time, s = sectionCnt
 						};
 						break;
 					case (uint)MIDINotes.ALT_AN:
 						sections.Last().Add("altAnim", true);
 						break;
 					case (uint)MIDINotes.BF_L:
-						n = new List<object>(){ time,
-							mustHitSection ? 0 : 4,
-							sus};
+						n.Add(time);
+						n.Add((byte)(mustHitSection ? 0 : 4));
+						n.Add(sus);
 						break;
 					case (uint)MIDINotes.BF_D:
-						n = new List<object>(){ time,
-							mustHitSection ? 1 : 5,
-							sus};
+						n.Add(time);
+						n.Add((byte)(mustHitSection ? 1 : 5));
+						n.Add(sus);
 						break;
 					case (uint)MIDINotes.BF_U:
-						n = new List<object>(){ time,
-							mustHitSection ? 2 : 6,
-							sus};
+						n.Add(time);
+						n.Add((byte)(mustHitSection ? 2 : 6));
+						n.Add(sus);
 						break;
 					case (uint)MIDINotes.BF_R:
-						n = new List<object>(){ time,
-							mustHitSection ? 3 : 7,
-							sus};
+						n.Add(time);
+						n.Add((byte)(mustHitSection ? 3 : 7));
+						n.Add(sus);
 						break;
 					case (uint)MIDINotes.EN_L:
-						n = new List<object>(){ time,
-							mustHitSection ? 4 : 0,
-							sus};
+						n.Add(time);
+						n.Add((byte)(mustHitSection ? 4 : 0));
+						n.Add(sus);
 						break;
 					case (uint)MIDINotes.EN_D:
-						n = new List<object>(){ time,
-							mustHitSection ? 5 : 1,
-							sus};
+						n.Add(time);
+						n.Add((byte)(mustHitSection ? 5 : 1));
+						n.Add(sus);
 						break;
 					case (uint)MIDINotes.EN_U:
-						n = new List<object>(){ time,
-							mustHitSection ? 6 : 2,
-							sus};
+						n.Add(time);
+						n.Add((byte)(mustHitSection ? 6 : 2));
+						n.Add(sus);
 						break;
 					case (uint)MIDINotes.EN_R:
-						n = new List<object>(){ time,
-							mustHitSection ? 7 : 3,
-							sus};
+						n.Add(time);
+						n.Add((byte)(mustHitSection ? 7 : 3));
+						n.Add(sus);
 						break;
 					default:
 						break;
 				}
-				if (n != null)
+				if (n != null && n.Count > 0)
 				{
 					// alt anim note
 					if ((notes[0].Flags & 0x10) == 0x10)
 						n.Add(true);
 					sectionList.Add(n.ToArray());
+					n.Clear();
 				}
 
-				progress++;
+				++progress; ++gcCounter;
 				if (sw.ElapsedMilliseconds > 10)
 				{
-					Console.Write($"\x1b[0G{progress} / {totalNotes} Done ({progress / (double)totalNotes:P3}) Current Section: {sections.Count}");
+					Console.Write($"\x1b[0G{progress} / {totalNotes} Done ({progress / (double)totalNotes:P3}) Current Section: {sectionCnt}");
 					sw.Restart();
 				}
 
-				// notes.RemoveAt(0);
+				/*if (gcCounter >= 1000000) {
+					Console.Write($"\x1b[0G{progress} / {totalNotes} Done ({progress / (double)totalNotes:P3}) Current Section: {sectionCnt}");
+					GC.Collect(); gcCounter = 0;
+				}*/
 			}
 			sw.Stop();
 
-			Console.Write($"\x1b[0G{progress} / {totalNotes} Done ({progress / (double)totalNotes:P3}) Current Section: {sections.Count}");
-			Console.WriteLine("");
+			Console.WriteLine($"\x1b[0G{progress} / {totalNotes} Done ({progress / (double)totalNotes:P3}) Current Section: {sectionCnt}");
 			//note to avoid confusion: the array of sections is called notes in json
-			song.Add("notes", JArray.FromObject(sections));
+			
 			JObject file = new JObject {
 					{ "song", song },
 					{ "generatedBy", "SNIFF ver." + Globals.VersionNumber }
 				};
 			return file;
-		}
-
-		static void MIDtoJSON() {
-
 		}
 
 		static void CollectFLPGlobals(FLFile flFile)
@@ -768,11 +778,11 @@ namespace SNIFF
 			Console.WriteLine("SiIva Note Importer For FNF (SNIFF)\nquite pungent my dear... version "+ Globals.VersionNumber +"\n");
 			OpenFileDialog fileBrowser = new OpenFileDialog {
 				InitialDirectory = Directory.GetCurrentDirectory(),
-				Filter = "FL Studio file (*.fsc, *.flp)|*.fsc;*.flp|MIDI file (*.mid)|*.mid|JSON file (*.json)|*.json|All files (*.*)|*.*",
+				Filter = "FL Studio file (*.fsc, *.flp)|*.fsc;*.flp|JSON file (*.json)|*.json|All files (*.*)|*.*",
 				Multiselect = true
 			};
 			if (args.Length == 0)
-				Console.WriteLine("Select your .fsc, .flp .mid or .json file...");
+				Console.WriteLine("Select your .fsc, .flp or .json file...");
 			if (args.Length > 0 || fileBrowser.ShowDialog() == DialogResult.OK)
 			{
 				if (args.Length == 0)
@@ -785,12 +795,15 @@ namespace SNIFF
 						Console.WriteLine("Opened JSON file: " + fileName);
 						JObject o;
 						try { o = JObject.Parse(File.ReadAllText(fileName)); }
-						catch (Exception e) {
+						catch (Exception e)
+						{
 							MessageBox.Show(e.Message);
 							return;
 						}
 
+						GC.Collect();
 						byte[] file = JSONtoFL(o).ToArray();
+						GC.Collect();
 
 						SaveFileDialog saveBrowser = new SaveFileDialog
 						{
@@ -804,39 +817,14 @@ namespace SNIFF
 							dir = Path.GetDirectoryName(saveBrowser.FileName);
 						}
 					}
-					else if (fileName.EndsWith(".mid"))
-					{
-						Console.WriteLine("Opened MID file: " + fileName);
-						Console.WriteLine("Only 1 difficulty supports.");
-						JObject o;
-						try { o = JObject.Parse(File.ReadAllText(fileName)); }
-						catch (Exception e)
-						{
-							MessageBox.Show(e.Message);
-							return;
-						}
-
-						byte[] file = JSONtoFL(o).ToArray();
-
-						SaveFileDialog saveBrowser = new SaveFileDialog
-						{
-							InitialDirectory = dir,
-							Filter = "JSON File (*.json)|*.json|All files (*.*)|*.*",
-							FileName = Path.GetFileNameWithoutExtension(fileName) + ".json",
-						};
-						if (saveBrowser.ShowDialog() == DialogResult.OK)
-						{
-							File.WriteAllBytes(saveBrowser.FileName, file);
-							dir = Path.GetDirectoryName(saveBrowser.FileName);
-						}
-					}
 
 					else
 					{
 						byte[] b = null;
 						Console.WriteLine("Reading file...");
-						try {b = File.ReadAllBytes(fileName);}
-						catch (Exception e) {
+						try { b = File.ReadAllBytes(fileName); }
+						catch (Exception e)
+						{
 							MessageBox.Show(e.Message);
 							return;
 						}
@@ -846,8 +834,8 @@ namespace SNIFF
 						Console.WriteLine("Reading Done");
 						FLFile flFile = new FLFile(b);
 
-						ushort[] patterns = new ushort[] {0, 0, 0};
-						string[] diffnames = new string[] {"easy", "normal", "hard"};
+						ushort[] patterns = new ushort[] { 0, 0, 0 };
+						string[] diffnames = new string[] { "easy", "normal", "hard" };
 						bool diffs = false;
 						for (int j = 0; j < diffnames.Length; j++)
 						{
@@ -872,11 +860,12 @@ namespace SNIFF
 
 						for (int i = 0; i < patterns.Length; i++)
 						{
+							GC.Collect();
 							if (patterns[i] != 0)
 							{
 								if (diffs)
 									Console.WriteLine("Current difficulty: " + diffnames[i]);
-								JObject file = FLtoJSON(CollectFLNotes(flFile, patterns[i], diffs));
+								JObject file = FLtoJSON(CollectFLNotes(flFile, patterns[i], diffs), fileName);
 								if (file != null)
 								{
 									SaveFileDialog saveBrowser = new SaveFileDialog
@@ -898,6 +887,7 @@ namespace SNIFF
 						}
 						ResetGlobals();
 					}
+					GC.Collect();
 				}
 
 				Console.WriteLine("Press any key to close...");
