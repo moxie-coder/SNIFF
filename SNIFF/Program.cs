@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
@@ -507,6 +508,8 @@ namespace SNIFF
 			List<object> n = new List<object>(4);
 			song.Add("notes", JArray.FromObject(sections));
 
+			JToken looper = null;
+
 			Stopwatch sw = new Stopwatch();
 			sw.Start();
 
@@ -522,7 +525,11 @@ namespace SNIFF
 					if (sectionList.Count > 0)
                     {
 						sections.Last()["sectionNotes"] = JToken.FromObject(sectionList.ToArray());
-						((JArray)song["notes"]).Add(JToken.FromObject(sections));
+						looper = JToken.FromObject(sections.ToArray());
+						foreach (JToken loop in looper)
+						{
+							((JArray)song["notes"]).Add(loop);
+						}
 						sections.Clear();
 
 						/*if (sectionList.Count >= 1000000)
@@ -676,7 +683,11 @@ namespace SNIFF
 			if (sections.Count > 0)
 			{
 				sections.Last()["sectionNotes"] = JToken.FromObject(sectionList.ToArray());
-				((JArray)song["notes"]).Add(JToken.FromObject(sections));
+				looper = JToken.FromObject(sections.ToArray());
+				foreach (JToken loop in looper)
+				{
+					((JArray)song["notes"]).Add(loop);
+				}
 				sections.Clear();
 
 				/*if (sectionList.Count >= 1000000)
@@ -686,6 +697,7 @@ namespace SNIFF
 				}*/
 			}
 
+			looper = null;
 			sw.Stop();
 
 			Console.WriteLine($"\x1b[0G{progress} / {totalNotes} Done ({progress / (double)totalNotes:P3}) Current Section: {sectionCnt}");
@@ -783,13 +795,24 @@ namespace SNIFF
 		[STAThread]
 		static void Main(string[] args)
 		{
+			/* test formatting json ... thanks on stack overflow
+			string str = JsonHelper.FormatJson(@"{""name"":""andy"",""age"":27,""birth"":""1997/06/21"",""score"":[{""S"":1,""A"":3,""B"":6,""C"":2,""D"":0}]}");
+			Console.Write(str);
+
+			return;
+			*/
+			
 			// Enable ANSI Escape Sequences
 			var stdout = Console.OpenStandardOutput();
 			var con = new StreamWriter(stdout);
+			string jsonOut = "";
 			con.AutoFlush = true;
 			Console.SetOut(con);
-
 			Console.WriteLine("SiIva Note Importer For FNF (SNIFF)\nquite pungent my dear... version "+ Globals.VersionNumber +"\n");
+
+			Console.WriteLine("Do you output formatted JSON? (y/N, Default N)");
+			bool isFormat = Console.ReadLine().ToLower().Trim() == "y";
+
 			OpenFileDialog fileBrowser = new OpenFileDialog {
 				InitialDirectory = Directory.GetCurrentDirectory(),
 				Filter = "FL Studio file (*.fsc, *.flp)|*.fsc;*.flp|JSON file (*.json)|*.json|All files (*.*)|*.*",
@@ -893,7 +916,9 @@ namespace SNIFF
 									saveBrowser.FileName += ".json";
 									if (saveBrowser.ShowDialog() == DialogResult.OK)
 									{
-										File.WriteAllText(saveBrowser.FileName, file.ToString(Formatting.None));
+										jsonOut = file.ToString(Formatting.None);
+										if (isFormat) Console.WriteLine("Formatting json....");
+										File.WriteAllText(saveBrowser.FileName, isFormat ? JsonHelper.FormatJson(jsonOut) : jsonOut);
 										dir = Path.GetDirectoryName(saveBrowser.FileName);
 									}
 								}
