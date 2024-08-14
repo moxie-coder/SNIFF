@@ -522,7 +522,7 @@ namespace SNIFF
 					if (sectionList.Count > 0)
                     {
 						sections.Last()["sectionNotes"] = JToken.FromObject(sectionList.ToArray());
-						((JArray)song["notes"]).Add(JToken.FromObject(sections.Last()));
+						((JArray)song["notes"]).Add(JToken.FromObject(sections));
 						sections.Clear();
 
 						/*if (sectionList.Count >= 1000000)
@@ -672,6 +672,20 @@ namespace SNIFF
 					GC.Collect(); gcCounter = 0;
 				}*/
 			}
+
+			if (sections.Count > 0)
+			{
+				sections.Last()["sectionNotes"] = JToken.FromObject(sectionList.ToArray());
+				((JArray)song["notes"]).Add(JToken.FromObject(sections));
+				sections.Clear();
+
+				/*if (sectionList.Count >= 1000000)
+				{
+					GC.Collect();
+					gcCounter = 0;
+				}*/
+			}
+
 			sw.Stop();
 
 			Console.WriteLine($"\x1b[0G{progress} / {totalNotes} Done ({progress / (double)totalNotes:P3}) Current Section: {sectionCnt}");
