@@ -187,13 +187,16 @@ namespace SNIFF
 			return DefaultNote(0, (uint)Globals.ppqn / 4, 60);
 		}
 
-		static JObject DefaultSection()
+		static JObject DefaultSection(bool length)
 		{
-			return new JObject{
-				{ "lengthInSteps", 16 }, //sigh
-				{ "mustHitSection", true },
-				{ "sectionNotes", JArray.FromObject(new object[][] { }) }
-			}; 
+			JObject section = new JObject{};
+			if (length)
+			{
+				section.Add("lengthInSteps", 16); //sigh
+			}
+			section.Add("mustHitSection", true);
+			section.Add("sectionNotes", JArray.FromObject(new object[][] { }));
+			return section; 
 		}
 
 		static byte[] FLNotesToBytes(List<FLNote> notes)
@@ -219,9 +222,8 @@ namespace SNIFF
 
 		static List<byte> JSONtoFL(JObject o)
 		{
-
 			Globals.ppqn = 96;
-			Console.Write("How is set value of PPQ? (Default is 96, Max is 65535, 0 will set in 96) ");
+			Console.Write("Enter the PPQ value. (Default is 96, Max is 65535, 0 will set in 96) ");
 			string tmppqn = Console.ReadLine();
 			if (tmppqn != null) {
 				Globals.ppqn = ushort.Parse(tmppqn);
@@ -249,8 +251,9 @@ namespace SNIFF
 
 			Stopwatch sw = new Stopwatch();
 			sw.Start(); int[] typeCnt = new int[2];
+			int length = o["song"]["notes"].Count();
 
-			for (int i = 0; i < o["song"]["notes"].Count();i++)
+			for (int i = 0; i < length; i++)
 			{
 				// yes the section loop actually.
 				// different kind of sex
@@ -291,7 +294,7 @@ namespace SNIFF
 					}
 					if(sw.ElapsedMilliseconds > 10)
                     {
-						Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Double Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
+						Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Double Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count + " - " + string.Format("{0:P} Done", i/length));
 						sw.Restart();
 					}
 					notes.Add(swagNote);
@@ -369,7 +372,7 @@ namespace SNIFF
 			return notes;
 		}
 
-		static JObject FLtoJSON(List<FLNote> notes, string fileName)
+		static JObject FLtoJSON(List<FLNote> notes, string fileName, bool addLength)
 		{
 			if (notes == null)
 				return null;
@@ -434,11 +437,14 @@ namespace SNIFF
 			}
 			song.Add("stage", Globals.stage);
 
-			Console.Write("speed: ");
+			Console.Write("speed (if u leave blank, it's auto calculate based current bpm): ");
 			string spd = Console.ReadLine();
 			if (!string.IsNullOrWhiteSpace(spd))
 				song.Add("speed", float.Parse(spd));
-			else song.Add("speed", 1.0f);
+			else
+			{
+				song.Add("speed", Globals.bpm / 50);
+			}
 			int enableChangeBPM = 0; // 0 = no, 1 = yes, 2 = yes and use bpmList.txt
 
 			for (int i = 0; i < notes.Count; i++)
@@ -537,8 +543,14 @@ namespace SNIFF
 							GC.Collect();
 							gcCounter = 0;
 						}*/
+					} else {
+						if (sw.ElapsedMilliseconds > 50)
+						{
+							Console.Write($"\x1b[0G{progress} / {totalNotes} Done ({progress / (double)totalNotes:P3}) Current Section: {sectionCnt}");
+							sw.Restart();
+						}
 					}
-					sections.Add(DefaultSection());
+					sections.Add(DefaultSection(addLength));
 					sectionCnt++;
 					//Console.WriteLine("section added");
 					/*if (enableChangeBPM == 2 && lastBPMChangeTime.u > 0)
@@ -551,7 +563,7 @@ namespace SNIFF
 				}
 
 				double time = lastBPMChangeTime.f + MIDITimeToMillis(Globals.bpm) * (daNote.Time - lastBPMChangeTime.u);
-				time = Math.Round(time, 5, MidpointRounding.AwayFromZero);
+				time = Math.Round(time, 6, MidpointRounding.AwayFromZero);
 				//Console.WriteLine("note FNF TIME " + time);
 				double sus = 0;
 				//if note is 2 steps or longer, or if the velocity is lower than half
@@ -593,10 +605,14 @@ namespace SNIFF
 							Globals.bpm = Globals.bpmList[bpmListIdx++];
 						else if (enableChangeBPM == 1)
 						{
-							Console.WriteLine("\nNew BPM: ");
-							float daBPM = float.Parse(Console.ReadLine());
-							Globals.bpm = daBPM;
-							Globals.bpmList.Add(daBPM);
+							Console.WriteLine("\nNew BPM (ignore if blank): ");
+							string lineBPM = Console.ReadLine();
+							if (lineBPM != null)
+							{
+								float daBPM = float.Parse(lineBPM);
+								Globals.bpm = daBPM;
+								Globals.bpmList.Add(daBPM);
+							}
 						}
 							
 						if (enableChangeBPM < 3 && enableChangeBPM > 0) {
@@ -668,7 +684,7 @@ namespace SNIFF
 				}
 
 				++progress; ++gcCounter;
-				if (sw.ElapsedMilliseconds > 10)
+				if (sw.ElapsedMilliseconds > 50)
 				{
 					Console.Write($"\x1b[0G{progress} / {totalNotes} Done ({progress / (double)totalNotes:P3}) Current Section: {sectionCnt}");
 					sw.Restart();
@@ -810,8 +826,11 @@ namespace SNIFF
 			Console.SetOut(con);
 			Console.WriteLine("SiIva Note Importer For FNF (SNIFF)\nquite pungent my dear... version "+ Globals.VersionNumber +"\n");
 
-			Console.WriteLine("Do you output formatted JSON? (y/N, Default N)");
+			Console.WriteLine("Do you want to output formatted JSON? (y/N, Default N)");
 			bool isFormat = Console.ReadLine().ToLower().Trim() == "y";
+
+			Console.WriteLine("Do you need lengthInSteps Proprety for JSON? (y/N, Default Y)");
+			bool addLength = !(Console.ReadLine().ToLower().Trim() == "n");
 
 			OpenFileDialog fileBrowser = new OpenFileDialog {
 				InitialDirectory = Directory.GetCurrentDirectory(),
@@ -842,6 +861,7 @@ namespace SNIFF
 						byte[] file = JSONtoFL(o).ToArray();
 						GC.Collect();
 
+						dir = Path.GetDirectoryName(fileName);
 						SaveFileDialog saveBrowser = new SaveFileDialog
 						{
 							InitialDirectory = dir,
@@ -902,7 +922,7 @@ namespace SNIFF
 							{
 								if (diffs)
 									Console.WriteLine("Current difficulty: " + diffnames[i]);
-								JObject file = FLtoJSON(CollectFLNotes(flFile, patterns[i], diffs), fileName);
+								JObject file = FLtoJSON(CollectFLNotes(flFile, patterns[i], diffs), fileName, addLength);
 								if (file != null)
 								{
 									SaveFileDialog saveBrowser = new SaveFileDialog
