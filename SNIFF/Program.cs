@@ -46,6 +46,7 @@ namespace SNIFF
 		public static string gfVersion = "";
 		public static string stage = "";
 		public static string arrowSkin = "";
+		public static int passPreset = 0; // -1 = preset manual input, 0 = undecided, 1 = preset file
 	}
 
 	public enum MIDINotes
@@ -366,8 +367,14 @@ namespace SNIFF
 					ModY = b[i + 23]
 				};
 				notes.Add(n);
+
 				i += Globals.NoteSize;
 			}
+
+			FLNote[] flArray = notes.OrderBy(n => n.Time).ThenBy(n => n.Duration).ToArray(); // sort by time & duration
+			notes = flArray.ToList(); // convert back to List<FLNote>
+			flArray = null; // free memory
+
 			Console.WriteLine(notes.Count + " notes found.");
 			return notes;
 		}
@@ -379,72 +386,187 @@ namespace SNIFF
 			// after da data loop
 			// let us start assembling the funk
 			//Console.WriteLine("\nFirst, we gotta set up some data...");
-			if (Globals.name == "") {
-				Console.Write("Song name (leave here if u want set same name): ");
-				Globals.name = Console.ReadLine();
-				if (string.IsNullOrWhiteSpace(Globals.name) ) {
-					Globals.name = Path.GetFileNameWithoutExtension(fileName);
+
+			JObject song = null;
+
+			if (File.Exists("preset.txt")) {
+				if (Globals.passPreset == 0) { // if we haven't set the preset yet, ask the user
+					Console.WriteLine("You have a preset file for convert to json.");
+					Console.Write("Do you want to use it instead of manual input? (y/N, default y):");
+					Globals.passPreset = Console.ReadLine().ToLower().Trim() == "n" ? -1 : 1;
+				}
+				if (Globals.passPreset == 1)
+				{
+					bool commentMode = false;
+					string[] presetFile = File.ReadAllLines("preset.txt");
+					double speed = 0;
+					int lineCnt = 0;
+					for (int i = 0; i < presetFile.Length; ++i)
+					{
+						if (lineCnt >= 8) break; // only read the first 8 lines without comments
+						string line = presetFile[i].Trim();
+						if (line.StartsWith("//")) continue; // skip comments
+						else if (line.Contains("//")) // remove comments
+						{
+							line = line.Substring(0, line.IndexOf("//")).Trim();
+						}
+						else if (line.StartsWith("/*")) // start comment mode
+						{
+							commentMode = true;
+						}
+						else if (line.Contains("*/") && !line.Contains("\t")) // end comment mode, but ignores if it contains tab
+						{
+							commentMode = false;
+							continue;
+						}
+
+						if (commentMode) continue;
+
+						switch (lineCnt)
+						{
+							case 0: // song name
+								if (Globals.name == "") Globals.name = line;
+								if (string.IsNullOrWhiteSpace(Globals.name))
+								{
+									Globals.name = Path.GetFileNameWithoutExtension(fileName);
+								}
+								break;
+							case 1: // bpm
+								if (Globals.bpm == 0)
+								{
+									Console.Write("BPM: ");
+									Globals.bpm = float.Parse(line);
+								}
+								else if (Globals.bpmList.Count > 0)
+									Globals.bpm = Globals.bpmList[0];
+								break;
+							case 2: // needsVoices
+								if (Globals.needsVoices == 0) Globals.needsVoices = line.ToLower().Trim() == "n" ? -1 : 1;
+								break;
+							case 3: // player1
+								if (Globals.player1 == "") Globals.player1 = line;
+								if (string.IsNullOrWhiteSpace(Globals.player1)) Globals.player1 = "bf";
+								break;
+							case 4: // player2
+								if (Globals.player2 == "") Globals.player2 = line;
+								if (string.IsNullOrWhiteSpace(Globals.player2)) Globals.player2 = "dad";
+								break;
+							case 5: // gfVersion
+								if (Globals.gfVersion == "") Globals.gfVersion = line;
+								if (string.IsNullOrWhiteSpace(Globals.gfVersion)) Globals.gfVersion = "gf";
+								break;
+							case 6: // stage
+								if (Globals.stage == "") Globals.stage = line;
+								if (string.IsNullOrWhiteSpace(Globals.stage)) Globals.stage = "gf";
+								break;
+							case 7: // speed
+								string spd = line;
+								if (!string.IsNullOrWhiteSpace(spd)) {
+									speed = float.Parse(spd);
+								} else {
+									speed = Globals.bpm / 50;
+								}
+								break;
+							default:
+								Console.WriteLine("Unknown preset line: " + line);
+								break;
+						}
+						++lineCnt;
+					}
+
+					// settings
+					song = new JObject {
+						{ "song", Globals.name }
+					};
+					song.Add("bpm", Globals.bpm);
+					song.Add("needsVoices", Globals.needsVoices > 0);
+					song.Add("player1", Globals.player1);
+					song.Add("player2", Globals.player2);
+					song.Add("gfVersion", Globals.gfVersion);
+					song.Add("stage", Globals.stage);
+					song.Add("speed", speed);
 				}
 			}
-			JObject song = new JObject {
-				{ "song", Globals.name }
-			};
-			if (Globals.bpm == 0) {
-				Console.Write("BPM: ");
-				Globals.bpm = float.Parse(Console.ReadLine());
-			}
-			else if (Globals.bpmList.Count > 0)
-				Globals.bpm = Globals.bpmList[0];
 
-			// bpm section
-			song.Add("bpm", Globals.bpm);
-			if (Globals.needsVoices == 0) {
-				Console.Write("Use separate voices file? (y/N, default y) ");
-				Globals.needsVoices = Console.ReadLine().ToLower().Trim() == "n" ? -1 : 1;
-			}
-			song.Add("needsVoices", Globals.needsVoices > 0);
+			// if you don't have a preset file or want to input manually, i will ask you for manual input
+			if (!File.Exists("preset.txt") || Globals.passPreset == -1) {
+				Console.WriteLine(Globals.passPreset == -1 ? "Using manual input." : "No preset file found, using manual input.");
 
-			// player1 section
-			if (Globals.player1 == "") {
-				Console.Write("player1 (playable character like bf): ");
-				Globals.player1 = Console.ReadLine();
-				if(string.IsNullOrWhiteSpace(Globals.player1)) Globals.player1 = "bf";
-			}
-			song.Add("player1", Globals.player1);
+				if (Globals.name == "")
+				{
+					Console.Write("Song name (leave here if u want set same name): ");
+					Globals.name = Console.ReadLine();
+					if (string.IsNullOrWhiteSpace(Globals.name))
+					{
+						Globals.name = Path.GetFileNameWithoutExtension(fileName);
+					}
+				}
+				song = new JObject {
+					{ "song", Globals.name }
+				};
+				if (Globals.bpm == 0)
+				{
+					Console.Write("BPM: ");
+					Globals.bpm = float.Parse(Console.ReadLine());
+				}
+				else if (Globals.bpmList.Count > 0)
+					Globals.bpm = Globals.bpmList[0];
 
-			// player2 section
-			if (Globals.player2 == "") {
-				Console.Write("player2 (opponent character, see assets\\data\\characterList.txt): ");
-				Globals.player2 = Console.ReadLine();
-				if (string.IsNullOrWhiteSpace(Globals.player2)) Globals.player2 = "dad";
-			}
-			song.Add("player2", Globals.player2);
+				// bpm section
+				song.Add("bpm", Globals.bpm);
+				if (Globals.needsVoices == 0)
+				{
+					Console.Write("Use separate voices file? (y/N, default y) ");
+					Globals.needsVoices = Console.ReadLine().ToLower().Trim() == "n" ? -1 : 1;
+				}
+				song.Add("needsVoices", Globals.needsVoices > 0);
 
-			// girlfriend section
-			if (Globals.gfVersion == "") {
-				Console.Write("gfVersion (gf, gf-car, gf-christmas, gf-pixel): ");
-				Globals.gfVersion = Console.ReadLine();
-				if (string.IsNullOrWhiteSpace(Globals.gfVersion)) Globals.gfVersion = "gf";
-			}
-			song.Add("gfVersion", Globals.gfVersion);
+				// player1 section
+				if (Globals.player1 == "")
+				{
+					Console.Write("player1 (playable character like bf): ");
+					Globals.player1 = Console.ReadLine();
+					if (string.IsNullOrWhiteSpace(Globals.player1)) Globals.player1 = "bf";
+				}
+				song.Add("player1", Globals.player1);
 
-			// stage section
-			if (Globals.stage == "")
-			{
-				Console.Write("stage (stage, halloween, philly, limo, mall, mallEvil, school, schoolEvil, tank): ");
-				Globals.stage = Console.ReadLine();
-				if (string.IsNullOrWhiteSpace(Globals.stage)) Globals.stage = "stage";
-			}
-			song.Add("stage", Globals.stage);
+				// player2 section
+				if (Globals.player2 == "")
+				{
+					Console.Write("player2 (opponent character, see assets\\data\\characterList.txt): ");
+					Globals.player2 = Console.ReadLine();
+					if (string.IsNullOrWhiteSpace(Globals.player2)) Globals.player2 = "dad";
+				}
+				song.Add("player2", Globals.player2);
 
-			Console.Write("speed (if u leave blank, it's auto calculate based current bpm): ");
-			string spd = Console.ReadLine();
-			if (!string.IsNullOrWhiteSpace(spd))
-				song.Add("speed", float.Parse(spd));
-			else
-			{
-				song.Add("speed", Globals.bpm / 50);
+				// girlfriend section
+				if (Globals.gfVersion == "")
+				{
+					Console.Write("gfVersion (gf, gf-car, gf-christmas, gf-pixel): ");
+					Globals.gfVersion = Console.ReadLine();
+					if (string.IsNullOrWhiteSpace(Globals.gfVersion)) Globals.gfVersion = "gf";
+				}
+				song.Add("gfVersion", Globals.gfVersion);
+
+				// stage section
+				if (Globals.stage == "")
+				{
+					Console.Write("stage (stage, halloween, philly, limo, mall, mallEvil, school, schoolEvil, tank): ");
+					Globals.stage = Console.ReadLine();
+					if (string.IsNullOrWhiteSpace(Globals.stage)) Globals.stage = "stage";
+				}
+				song.Add("stage", Globals.stage);
+
+				Console.Write("speed (if u leave blank, it's auto calculate based current bpm): ");
+				string spd = Console.ReadLine();
+				if (!string.IsNullOrWhiteSpace(spd))
+					song.Add("speed", float.Parse(spd));
+				else
+				{
+					song.Add("speed", Globals.bpm / 50);
+				}
 			}
+
 			int enableChangeBPM = 0; // 0 = no, 1 = yes, 2 = yes and use bpmList.txt
 
 			for (int i = 0; i < notes.Count; i++)
@@ -455,8 +577,8 @@ namespace SNIFF
 					if (File.Exists("bpmList.txt") && Globals.bpmList.Count == 0)
 					{
 						Console.Write("Do you want to use bpmList.txt?\n" +
-							"(y/N, default N) ");
-						if (Console.ReadLine().ToLower().Trim() == "y")
+							"(y/N, default y) ");
+						if (Console.ReadLine().ToLower().Trim() != "n")
 						{
 							enableChangeBPM = 2;
 							string[] bpmListFile = File.ReadAllLines("bpmList.txt");
@@ -594,7 +716,8 @@ namespace SNIFF
 						sectionList = ((JArray)sections.Last()["sectionNotes"]).ToObject<List<object[]>>();
 						break;
 					case (uint)MIDINotes.BPM_CH:
-						if(sectionCnt == lastBPMChangeTime.s)
+						double oldBPM = Globals.bpm;
+						if (sectionCnt == lastBPMChangeTime.s)
 						{
 							Console.WriteLine("\nBPM change event found on bar " + sectionCnt + ", but this section\n" +
 											"already had a BPM change, so it was ignored.");
@@ -614,7 +737,7 @@ namespace SNIFF
 								Globals.bpmList.Add(daBPM);
 							}
 						}
-							
+
 						if (enableChangeBPM < 3 && enableChangeBPM > 0) {
 							if (sections.Last().ContainsKey("changeBPM"))
 								sections.Last()["bpm"] = Globals.bpm;
@@ -843,7 +966,7 @@ namespace SNIFF
 			{
 				if (args.Length == 0)
 					args = fileBrowser.FileNames;
-				string dir = Directory.GetCurrentDirectory();
+				string dir = Path.GetDirectoryName(fileBrowser.FileName);
 				foreach (string fileName in args)
 				{
 					if (fileName.EndsWith(".json"))
