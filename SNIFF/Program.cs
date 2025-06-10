@@ -5,9 +5,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime;
-using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -34,7 +31,7 @@ using System.Windows.Forms;
 
 namespace SNIFF
 {
-	static class Globals
+    static class Globals
 	{
 		public const int VersionNumber = 7;
 		public const int NoteSize = 24;
@@ -190,12 +187,7 @@ namespace SNIFF
 			};
 		}
 
-		static FLNote DefaultNote()
-		{
-			return DefaultNote(0, (uint)Globals.ppqn / 4, 60);
-		}
-
-		static JObject DefaultSection(bool length)
+        static JObject DefaultSection(bool length)
 		{
 			JObject section = new JObject{};
 			if (length)
@@ -509,17 +501,18 @@ namespace SNIFF
 					}
 
 					// settings
-					song = new JObject {
-						{ "song", Globals.name }
-					};
-					song.Add("bpm", Globals.bpm * Globals.bpmMult);
-					song.Add("needsVoices", Globals.needsVoices > 0);
-					song.Add("player1", Globals.player1);
-					song.Add("player2", Globals.player2);
-					song.Add("gfVersion", Globals.gfVersion);
-					song.Add("stage", Globals.stage);
-					song.Add("speed", speed);
-					song.Add("songCredit", Globals.songCredit);
+					song = new JObject
+                    {
+                        { "song", Globals.name },
+                        { "bpm", Globals.bpm * Globals.bpmMult },
+                        { "needsVoices", Globals.needsVoices > 0 },
+                        { "player1", Globals.player1 },
+                        { "player2", Globals.player2 },
+                        { "gfVersion", Globals.gfVersion },
+                        { "stage", Globals.stage },
+                        { "speed", speed },
+                        { "songCredit", Globals.songCredit }
+                    };
 				}
 			}
 
