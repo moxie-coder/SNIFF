@@ -940,14 +940,7 @@ namespace SNIFF
 		//yes the main function
 		[STAThread]
 		static void Main(string[] args)
-		{
-			/* test formatting json ... thanks on stack overflow
-			string str = JsonHelper.FormatJson(@"{""name"":""andy"",""age"":27,""birth"":""1997/06/21"",""score"":[{""S"":1,""A"":3,""B"":6,""C"":2,""D"":0}]}");
-			Console.Write(str);
-
-			return;
-			*/
-			
+		{			
 			// Enable ANSI Escape Sequences
 			var stdout = Console.OpenStandardOutput();
 			var con = new StreamWriter(stdout);
