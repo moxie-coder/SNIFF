@@ -39,7 +39,8 @@ namespace SNIFF
 		public const int VersionNumber = 7;
 		public const int NoteSize = 24;
 		public static ushort ppqn = 96;
-		public static string name = "";
+        public static float bpmMult = 1;
+        public static string name = "";
 		public static float bpm = 0;
 		public static List<float> bpmList = new List<float>();
 		public static int needsVoices = 0; //-1 = false, 0 = undecided, 1 = true
@@ -50,7 +51,8 @@ namespace SNIFF
 		public static string arrowSkin = "";
 		public static int enableBPMList = 0; // -1 = manual input, 0 = no, 1 = list file
 		public static int passPreset = 0; // -1 = preset manual input, 0 = undecided, 1 = preset file
-	}
+        public static string songCredit = ""; // for JS Engine support
+    }
 
 	public enum MIDINotes
 	{
@@ -97,12 +99,14 @@ namespace SNIFF
 			Globals.ppqn = 96;
 			Globals.name = "";
 			Globals.bpm = 0;
-			Globals.needsVoices = 0;
+            Globals.bpmMult = 0;
+            Globals.needsVoices = 0;
 			Globals.player1 = "";
 			Globals.player2 = "";
 			Globals.gfVersion = "";
 			Globals.stage = "";
-		}
+            Globals.songCredit = "";
+        }
 
 		public static FLNote MakeNote(double strumTime, int noteData, float sustainLength, bool mustHitSection, float bpm)
 		{
@@ -114,7 +118,7 @@ namespace SNIFF
 			if (sustainLength > 0)
 			{
 				duration = (uint)(sustainLength / MIDITimeToMillis(bpm));
-				if (duration < (uint)Globals.ppqn / 2)
+				if (duration < (uint)Globals.ppqn / 2 * Globals.bpmMult)
 					velo = 0x3F;
 			}
 			if (noteData >= (int)FNFNotes.BF_CAM)
@@ -294,7 +298,7 @@ namespace SNIFF
 				
 				foreach (JArray fnfNote in section["sectionNotes"])
 				{
-					FLNote swagNote = MakeNote((double)fnfNote[0] - lastBPMChangeTime.f, (int)fnfNote[1], (float)fnfNote[2], mustHitSection, bpm);
+					FLNote swagNote = MakeNote((double)fnfNote[0] - lastBPMChangeTime.f, (int)fnfNote[1], (float)fnfNote[2], mustHitSection, bpm * Globals.bpmMult);
 					swagNote.Time += lastBPMChangeTime.u;
 					if (fnfNote.Last().Type == JTokenType.Boolean && fnfNote.Last().Value<bool>() == true)
 						swagNote.Flags = 0x10; //set porta for alt anim Note
@@ -307,14 +311,18 @@ namespace SNIFF
 							typeCnt[1]++;
 							break;
 					}
+					if(sw.ElapsedMilliseconds > 10)
+                    {
+						Console.Write("\x1b[0GInteger Cnt: " + typeCnt[0] + " Double Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
+						sw.Restart();
+					}
 					notes.Add(swagNote);
 				}
 			}
 			sw.Stop();
 			isDone = true;
-
 			Console.WriteLine("\x1b[0GInteger Cnt: " + typeCnt[0] + " Double Cnt: " + typeCnt[1] + " Total Notes Cnt: " + notes.Count);
-			
+			Console.WriteLine("");
 			byte[] nBytes = FLNotesToBytes(notes);
 			// the array length lets goo
 			List<byte> arrlen = new List<byte>();
@@ -414,7 +422,7 @@ namespace SNIFF
 					int lineCnt = 0;
 					for (int i = 0; i < presetFile.Length; ++i)
 					{
-						if (lineCnt >= 8) break; // only read the first 8 lines without comments
+						if (lineCnt >= 9) break; // only read the first 9 lines without comments
 						string line = presetFile[i].Trim();
 						if (line.StartsWith("//")) continue; // skip comments
 						else if (line.Contains("//")) // remove comments
@@ -468,14 +476,29 @@ namespace SNIFF
 								break;
 							case 6: // stage
 								if (Globals.stage == "") Globals.stage = line;
-								if (string.IsNullOrWhiteSpace(Globals.stage)) Globals.stage = "gf";
+								if (string.IsNullOrWhiteSpace(Globals.stage)) Globals.stage = "stage";
 								break;
 							case 7: // speed
 								string spd = line;
 								if (!string.IsNullOrWhiteSpace(spd)) {
 									speed = float.Parse(spd);
 								} else {
-									speed = Globals.bpm / 50;
+									speed = Globals.bpm * Globals.bpmMult / 50;
+								}
+								break;
+							case 8: // song credits
+								if (Globals.songCredit == ""){
+									/*
+									Console.Write("song credit (only works in js engine): ");
+									Globals.songCredit = Console.ReadLine();
+									// song.Add("songCredit", Globals.songCredit);
+									*/
+									Globals.songCredit = line;
+								}
+								if (string.IsNullOrWhiteSpace(Globals.songCredit))
+								{
+									Console.Write("Song credits (only works in JS engine): ");
+									Globals.songCredit = Console.ReadLine();
 								}
 								break;
 							default:
@@ -489,13 +512,14 @@ namespace SNIFF
 					song = new JObject {
 						{ "song", Globals.name }
 					};
-					song.Add("bpm", Globals.bpm);
+					song.Add("bpm", Globals.bpm * Globals.bpmMult);
 					song.Add("needsVoices", Globals.needsVoices > 0);
 					song.Add("player1", Globals.player1);
 					song.Add("player2", Globals.player2);
 					song.Add("gfVersion", Globals.gfVersion);
 					song.Add("stage", Globals.stage);
 					song.Add("speed", speed);
+					song.Add("songCredit", Globals.songCredit);
 				}
 			}
 
@@ -524,7 +548,7 @@ namespace SNIFF
 					Globals.bpm = Globals.bpmList[0];
 
 				// bpm section
-				song.Add("bpm", Globals.bpm);
+				song.Add("bpm", Globals.bpm * Globals.bpmMult);
 				if (Globals.needsVoices == 0)
 				{
 					Console.Write("Use separate voices file? (y/N, default y) ");
@@ -574,7 +598,13 @@ namespace SNIFF
 					song.Add("speed", float.Parse(spd));
 				else
 				{
-					song.Add("speed", Globals.bpm / 50);
+					song.Add("speed", Globals.bpm * Globals.bpmMult / 50);
+				}
+				if (string.IsNullOrWhiteSpace(Globals.songCredit))
+				{
+					Console.Write("Song credits (only works in JS engine): ");
+					Globals.songCredit = Console.ReadLine();
+					song.Add("songCredit", Globals.songCredit);
 				}
 			}
 
@@ -619,8 +649,8 @@ namespace SNIFF
 						if (!string.IsNullOrWhiteSpace(newbpm))
 						{
 							float daBPM = float.Parse(newbpm);
-							Globals.bpm = daBPM;
-							song["bpm"] = daBPM;
+							Globals.bpm = daBPM * Globals.bpmMult;
+							song["bpm"] = daBPM * Globals.bpmMult;
 							Globals.bpmList.Add(daBPM);
 						}
 						Console.WriteLine("Selected BPM: " + Globals.bpm + "\nGreat! Keep an eye out, we'll be asking you for the new BPMs.");
@@ -692,7 +722,6 @@ namespace SNIFF
 					section.Add(lastSection);
 					sectionCnt++;
 					lastSection["mustHitSection"] = mustHitSection;
-
 					holyShit = (JArray)lastSection["sectionNotes"];
 				}
 
@@ -701,14 +730,13 @@ namespace SNIFF
 					roundDecimal, 
 					MidpointRounding.AwayFromZero
 				);
-
 				sustainTime = 0;
 				// if note is 2 steps or longer, or if the velocity is lower than half
 				// we actually get the sus
 				if (daNote.Velocity < 0x40 || daNote.Duration >= Globals.ppqn / 2)
 				{
 					sustainTime = Math.Round(
-						MIDITimeToMillis(Globals.bpm) * (daNote.Duration - Globals.ppqn / 4),
+						MIDITimeToMillis(Globals.bpm * Globals.bpmMult) * (daNote.Duration - Globals.ppqn / 4),
 						roundDecimal,
 						MidpointRounding.AwayFromZero
 					);
@@ -942,8 +970,10 @@ namespace SNIFF
 				DereferenceLinks = true,
 				RestoreDirectory = true
 			};
-			if (args.Length == 0) Console.WriteLine("Select your .fsc, .flp or .json file...");
-
+            Console.Write("bpm mult (multiplies bpm): ");
+            Globals.bpmMult = float.Parse(Console.ReadLine());
+            if (args.Length == 0)
+				Console.WriteLine("Select your .fsc, .flp or .json file...");
 			if (args.Length > 0 || fileBrowser.ShowDialog() == DialogResult.OK)
 			{
 				if (args.Length == 0)
